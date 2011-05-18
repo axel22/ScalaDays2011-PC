@@ -84,7 +84,7 @@ object ParCharCount extends testing.Benchmark {
 
 object SeqWordCount extends testing.Benchmark {
   
-  val txt = "A short text...  " * 500000
+  val txt = "A short text...  " * 250000
   val ps = new ParString(txt)
   
   def run() {
@@ -93,7 +93,7 @@ object SeqWordCount extends testing.Benchmark {
       case ((wc, true), x) => (wc + 1, false)
       case ((wc, false), x) => (wc, false)
     }
-    println(wc)
+    //println(wc)
   }
   
 }
@@ -103,17 +103,55 @@ object ParWordCount extends testing.Benchmark {
   
   tasksupport.asInstanceOf[ForkJoinTasks].forkJoinPool.setParallelism(Global.par.get)
   
-  val txt = "A short text..." * 500000
+  val txt = "A short text...  " * 250000
   val ps = new ParString(txt)
   
   def run() {
-    ps.aggregate((false, -1, false))({
-      
+    val wc = ps.aggregate((0, 0, 0))({
+      case ((ls, 0, _), ' ')   => (ls + 1, 0, ls + 1)
+      case ((ls, 0, _), c)     => (ls, 1, 0)
+      case ((ls, wc, rs), ' ') => (ls, wc, rs + 1)
+      case ((ls, wc, 0), c)    => (ls, wc, 0)
+      case ((ls, wc, rs), c)   => (ls, wc + 1, 0)
     }, {
-      case ((ls, lwc, linner), (rinner, rwc, rs)) if linner || rinner => (ls, lwc + rwc, rs)
-      case ((ls, lwc, false), (false, rwc, rs)) if lwc > 0 && rwc > 0 => (ls, lwc + rwc - 1, rs)
-      case ((ls, lwc, _), (_, rwc, rs)) => (ls, lwc + rwc, rs)
+      case ((0, 0, 0), res) => res
+      case (res, (0, 0, 0)) => res
+      case ((lls, lwc, 0), (0, rwc, rrs)) => (lls, lwc + rwc - 1, rrs)
+      case ((lls, lwc, _), (_, rwc, rrs)) => (lls, lwc + rwc, rrs)
     })
+    //println(wc)
+  }
+  
+}
+
+
+object ParWordCountOptimized extends testing.Benchmark {
+  
+  tasksupport.asInstanceOf[ForkJoinTasks].forkJoinPool.setParallelism(Global.par.get)
+  
+  val txt = "A short text...  " * 250000
+  val ps = new ParString(txt)
+  
+  def run() {
+    val wc = ps.aggregate((0, 0, 0))({ (x, y) =>
+      if (x._2 > 0) {
+        if (y != ' ') (x, y) match {
+          case ((ls, wc, 0), c)    => (ls, wc, 0)
+          case ((ls, wc, rs), c)   => (ls, wc + 1, 0)
+        } else x match {
+          case (ls, wc, rs) => (ls, wc, rs + 1)
+        }
+      } else (x, y) match {
+        case ((ls, 0, _), ' ')   => (ls + 1, 0, ls + 1)
+        case ((ls, 0, _), c)     => (ls, 1, 0)
+      }
+    }, {
+      case ((0, 0, 0), res) => res
+      case (res, (0, 0, 0)) => res
+      case ((lls, lwc, 0), (0, rwc, rrs)) => (lls, lwc + rwc - 1, rrs)
+      case ((lls, lwc, _), (_, rwc, rrs)) => (lls, lwc + rwc, rrs)
+    })
+    //println(wc)
   }
   
 }
