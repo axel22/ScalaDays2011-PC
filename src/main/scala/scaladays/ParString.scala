@@ -16,21 +16,21 @@ extends immutable.ParSeq[Char] {
   
   def seq = new collection.immutable.WrappedString(str)
   
-  def splitter = new ParStringSplitter(0, str.length) with SCPI
+  def splitter = new ParStringSplitter(str, 0, str.length) with SCPI
   
   type SCPI = SignalContextPassingIterator[ParStringSplitter]
   
-  class ParStringSplitter(var i: Int, val ntl: Int)
+  class ParStringSplitter(private var s: String, private var i: Int, private val ntl: Int)
   extends Splitter[Char] with ParIterator {
   self: SCPI =>
-    def hasNext = i < ntl
-    def next = {
-      val r = str.charAt(i)
+    final def hasNext = i < ntl
+    final def next = {
+      val r = s.charAt(i)
       i += 1
       r
     }
     def remaining = ntl - i
-    def dup = new ParStringSplitter(i, ntl) with SCPI
+    def dup = new ParStringSplitter(s, i, ntl) with SCPI
     def split = {
       val rem = remaining
       if (rem >= 2) psplit(rem / 2, rem - rem / 2)
@@ -40,7 +40,7 @@ extends immutable.ParSeq[Char] {
       val splitted = new ArrayBuffer[ParStringSplitter]
       for (sz <- sizes) {
         val next = (i + sz) min ntl
-        splitted += new ParStringSplitter(i, next) with SCPI
+        splitted += new ParStringSplitter(s, i, next) with SCPI
         i = next
       }
       splitted
@@ -50,20 +50,78 @@ extends immutable.ParSeq[Char] {
 }
 
 
-object Example {
+object Global {
+  val par = Option(System.getProperty("par")).map(_.toInt)
+}
+
+
+object SeqCharCount extends testing.Benchmark {
   
-  def main(args: Array[String]) {
-    val txt = "A short text..." * 1000000
-    val ps = new ParString(txt)
-    
-    // val characters = ps.aggregate(0)((x, y) => x + 1, _ + _)
-    // println(characters)
-    
-    val s = System.currentTimeMillis
-    for (i <- 0 until 50) ps.aggregate(0)((x, y) => x + 1, _ + _)
-    //for (i <- 0 until 50) txt.foldLeft(0)((x, y) => x + 1)
-    val e = System.currentTimeMillis
-    println(e - s)
+  val txt = "A short text..." * 500000
+  val ps = new ParString(txt)
+  
+  def run() {
+    txt.foldLeft(0)((x, y) => x + 1)
   }
   
 }
+
+
+object ParCharCount extends testing.Benchmark {
+  
+  tasksupport.asInstanceOf[ForkJoinTasks].forkJoinPool.setParallelism(Global.par.get)
+  
+  val txt = "A short text..." * 500000
+  val ps = new ParString(txt)
+  
+  def run() {
+    ps.aggregate(0)((x, y) => x + 1, _ + _)
+    //ps.foldLeft(0)((x, y) => x + 1)
+  }
+  
+}
+
+
+object SeqWordCount extends testing.Benchmark {
+  
+  val txt = "A short text...  " * 500000
+  val ps = new ParString(txt)
+  
+  def run() {
+    val wc = txt.foldLeft((0, true)) {
+      case ((wc, _), ' ') => (wc, true)
+      case ((wc, true), x) => (wc + 1, false)
+      case ((wc, false), x) => (wc, false)
+    }
+    println(wc)
+  }
+  
+}
+
+
+object ParWordCount extends testing.Benchmark {
+  
+  tasksupport.asInstanceOf[ForkJoinTasks].forkJoinPool.setParallelism(Global.par.get)
+  
+  val txt = "A short text..." * 500000
+  val ps = new ParString(txt)
+  
+  def run() {
+    ps.aggregate((false, -1, false))({
+      
+    }, {
+      case ((ls, lwc, linner), (rinner, rwc, rs)) if linner || rinner => (ls, lwc + rwc, rs)
+      case ((ls, lwc, false), (false, rwc, rs)) if lwc > 0 && rwc > 0 => (ls, lwc + rwc - 1, rs)
+      case ((ls, lwc, _), (_, rwc, rs)) => (ls, lwc + rwc, rs)
+    })
+  }
+  
+}
+
+
+
+
+
+
+
+
