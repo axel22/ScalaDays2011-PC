@@ -52,6 +52,17 @@ extends immutable.ParSeq[Char] {
 
 object Global {
   val par = Option(System.getProperty("par")).map(_.toInt)
+  
+  def vowel(c: Char) = c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u'
+  
+  def genNames(len: Int, names: Seq[String]): Seq[String] = if (len == 0) names else
+    (for (s <- genNames(len - 1, names); c <- 'a' to 'z') yield {
+      if (s.length == 0) s + c
+      else if (vowel(s.last) && !vowel(c)) s + c
+      else if (!vowel(s.last) && vowel(c)) s + c
+      else s
+    }).distinct
+  
 }
 
 
@@ -157,7 +168,77 @@ object ParWordCountOptimized extends testing.Benchmark {
 }
 
 
+object SeqFindPairs extends testing.Benchmark {
+  
+  val names = Global.genNames(3, Array("")).filter(_.length > 1)
+  val surnames = Global.genNames(4, Array("")).filter(_.length > 2)
+  
+  def run() {
+    val results = for {
+      s <- surnames
+      n <- names
+      if s endsWith n
+    } yield (n, s);
+    //println(results)
+  }
+  
+}
 
+
+object ParFindPairs extends testing.Benchmark {
+  
+  tasksupport.asInstanceOf[ForkJoinTasks].forkJoinPool.setParallelism(Global.par.get)
+  
+  val names = Global.genNames(3, Array("")).filter(_.length > 1)
+  val surnames = Global.genNames(4, Array("")).filter(_.length > 2)
+  
+  def run() {
+    val results = for {
+      s <- surnames.par
+      n <- names.par
+      if s endsWith n
+    } yield (n, s);
+    //println(results)
+  }
+  
+}
+
+
+object SeqGenNames extends testing.Benchmark {
+  def vowel(c: Char) = c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u'
+  
+  def genNames(len: Int, names: Seq[String]): Seq[String] = if (len == 0) names else
+    for (s <- genNames(len - 1, names); c <- 'a' to 'z') yield {
+      if (s.length == 0) s + c
+      else if (vowel(s.last) && !vowel(c)) s + c
+      else if (!vowel(s.last) && vowel(c)) s + c
+      else s
+    }
+  
+  def run() {
+    genNames(5, Array(""))
+  }
+}
+
+
+object ParGenNames extends testing.Benchmark {
+  
+  tasksupport.asInstanceOf[ForkJoinTasks].forkJoinPool.setParallelism(Global.par.get)
+  
+  def vowel(c: Char) = c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u'
+  
+  def genNames(len: Int, names: ParSeq[String]): ParSeq[String] = if (len == 0) names else
+    for (s <- genNames(len - 1, names); c <- 'a' to 'z') yield {
+      if (s.length == 0) s + c
+      else if (vowel(s.last) && !vowel(c)) s + c
+      else if (!vowel(s.last) && vowel(c)) s + c
+      else s
+    }
+  
+  def run() {
+    genNames(5, mutable.ParArray(""))
+  }
+}
 
 
 
