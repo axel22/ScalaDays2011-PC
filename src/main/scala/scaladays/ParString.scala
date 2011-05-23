@@ -6,6 +6,17 @@ import collection.parallel._
 import collection.mutable.ArrayBuffer
 
 
+/**
+ *  How to run?
+ *  -----------
+ *  
+ *  Start this project in SBT, then just type:
+ *  
+ *    bench -Dpar=1 scaladays.<bench-name> 10 1
+ *  
+ *  where <bench-name> is the name of one of the benchmark classes below.
+ */
+
 
 class ParString(val str: String)
 extends immutable.ParSeq[Char] {
