@@ -349,3 +349,12 @@ object ParCharFilter extends testing.Benchmark {
 }
 
 
+object SeqCharFilter extends testing.Benchmark {
+  
+  val txt = "A short text..." * 500000
+  
+  def run() {
+    txt.filter(_ != ' ')
+  }
+  
+}
