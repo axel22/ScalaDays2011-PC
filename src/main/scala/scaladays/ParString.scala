@@ -265,7 +265,7 @@ extends immutable.ParSeq[Char]
   
   def splitter = new ParStringSplitter(str, 0, str.length) with SCPI
   
-  protected[this] override def newCombiner = null // TODO
+  protected[this] override def newCombiner: Combiner[Char, ParString2] = new ParStringCombiner
   
   type SCPI = SignalContextPassingIterator[ParStringSplitter]
   
