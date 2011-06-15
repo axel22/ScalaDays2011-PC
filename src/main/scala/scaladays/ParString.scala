@@ -252,6 +252,100 @@ object ParGenNames extends testing.Benchmark {
 }
 
 
+class ParString2(val str: String)
+extends immutable.ParSeq[Char]
+   with ParSeqLike[Char, ParString2, collection.immutable.WrappedString]
+{
+  
+  def apply(i: Int) = str.charAt(i)
+  
+  def length = str.length
+  
+  def seq = new collection.immutable.WrappedString(str)
+  
+  def splitter = new ParStringSplitter(str, 0, str.length) with SCPI
+  
+  protected[this] override def newCombiner = null // TODO
+  
+  type SCPI = SignalContextPassingIterator[ParStringSplitter]
+  
+  class ParStringSplitter(private var s: String, private var i: Int, private val ntl: Int)
+  extends Splitter[Char] with ParIterator {
+  self: SCPI =>
+    final def hasNext = i < ntl
+    final def next = {
+      val r = s.charAt(i)
+      i += 1
+      r
+    }
+    def remaining = ntl - i
+    def dup = new ParStringSplitter(s, i, ntl) with SCPI
+    def split = {
+      val rem = remaining
+      if (rem >= 2) psplit(rem / 2, rem - rem / 2)
+      else Seq(this)
+    }
+    def psplit(sizes: Int*): Seq[ParIterator] = {
+      val splitted = new ArrayBuffer[ParStringSplitter]
+      for (sz <- sizes) {
+        val next = (i + sz) min ntl
+        splitted += new ParStringSplitter(s, i, next) with SCPI
+        i = next
+      }
+      splitted
+    }
+  }
+  
+}
 
+
+private class ParStringCombiner extends Combiner[Char, ParString2] {
+  var sz = 0
+  val chunks = new ArrayBuffer[StringBuilder] += new StringBuilder
+  var lastc = chunks.last
+  
+  def size: Int = sz
+  
+  def +=(elem: Char): this.type = {
+    lastc += elem
+    sz += 1
+    this
+  }
+  
+  def clear = {
+    chunks.clear
+    chunks += new StringBuilder
+    lastc = chunks.last
+    sz = 0
+  }
+  
+  def result: ParString2 = {
+    val rsb = new StringBuilder
+    for (sb <- chunks) rsb.append(sb)
+    new ParString2(rsb.toString)
+  }
+  
+  def combine[U <: Char, NewTo >: ParString2](other: Combiner[U, NewTo]) = if (other eq this) this else {
+    val that = other.asInstanceOf[ParStringCombiner]
+    sz += that.sz
+    chunks ++= that.chunks
+    lastc = chunks.last
+    this
+  }
+}
+
+
+object ParCharFilter extends testing.Benchmark {
+  
+  tasksupport.asInstanceOf[ForkJoinTasks].forkJoinPool.setParallelism(Global.par.get)
+  
+  val txt = "A short text..." * 500000
+  val ps = new ParString2(txt)
+  
+  def run() {
+    ps.filter(_ != ' ')
+  }
+  
+}
 
 
